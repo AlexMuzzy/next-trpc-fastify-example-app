@@ -34,8 +34,6 @@ import {
   LogIn,
   UserPlus,
   LogOut,
-  Mail,
-  MailCheck,
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 
@@ -44,9 +42,6 @@ export default function Dashboard() {
   const { data: session, isPending: sessionLoading } = useSession();
   const health = trpc.healthz.useQuery();
   const todos = trpc.todos.list.useQuery();
-  const authStats = trpc.auth.stats.useQuery(undefined, {
-    enabled: !!session?.user,
-  });
   const utils = trpc.useUtils();
 
   // State for todo management
@@ -581,85 +576,6 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-
-                  {/* User Stats */}
-                  {authStats.data && (
-                    <div className="space-y-2">
-                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                            <span className="text-xs text-gray-600 dark:text-gray-400">
-                              Total Users
-                            </span>
-                          </div>
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {authStats.data.totalUsers}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <MailCheck className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                            <span className="text-xs text-gray-600 dark:text-gray-400">
-                              Verified
-                            </span>
-                          </div>
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {authStats.data.verifiedUsers}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <TrendingUp className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                            <span className="text-xs text-gray-600 dark:text-gray-400">
-                              Recent (7d)
-                            </span>
-                          </div>
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {authStats.data.recentUsers}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recent Users List */}
-                  {authStats.data && authStats.data.users.length > 0 && (
-                    <div>
-                      <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
-                        Recent Users
-                      </p>
-                      <div className="max-h-32 space-y-1 overflow-y-auto">
-                        {authStats.data.users.map((u) => (
-                          <div
-                            key={u.id}
-                            className="flex items-center gap-2 rounded-md bg-gray-50 px-2 py-1.5 dark:bg-gray-700"
-                          >
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-                              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                                {u.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-medium text-gray-900 dark:text-white">
-                                {u.name}
-                              </p>
-                              <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                                {u.email}
-                              </p>
-                            </div>
-                            {u.emailVerified && (
-                              <MailCheck className="h-3 w-3 text-green-600 dark:text-green-400" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Sign Out Button */}
                   <button

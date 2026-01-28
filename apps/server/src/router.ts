@@ -7,7 +7,6 @@ import {
   updateTodo,
   deleteTodo,
 } from "./services/todos.js";
-import { getUserStats } from "./services/auth-stats.js";
 import type { DrizzleClient } from "./index.js";
 import type { createAuth } from "./lib/auth.js";
 
@@ -47,11 +46,6 @@ export const appRouter = router({
     delete: publicProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => deleteTodo(ctx.db, input.id)),
-  }),
-  auth: router({
-    stats: publicProcedure.query(async ({ ctx }) =>
-      getUserStats(ctx.auth, ctx.headers),
-    ),
   }),
 });
 

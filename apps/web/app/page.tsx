@@ -41,7 +41,13 @@ export default function Dashboard() {
   const router = useRouter();
   const { data: session, isPending: sessionLoading } = useSession();
   const health = trpc.healthz.useQuery();
-  const todos = trpc.todos.list.useQuery();
+  const isLoggedIn = !!session?.user;
+  const todos = trpc.todos.list.useQuery(undefined, {
+    enabled: isLoggedIn,
+  });
+  const dashboardStats = trpc.dashboard.stats.useQuery(undefined, {
+    enabled: !isLoggedIn,
+  });
   const utils = trpc.useUtils();
 
   // State for todo management
@@ -77,13 +83,19 @@ export default function Dashboard() {
 
   // Computed data for visualizations
   const dashboardData = useMemo(() => {
-    const todosList = todos.data ?? [];
+    // Use todos data if logged in, otherwise use dashboard stats
+    const todosList = isLoggedIn ? (todos.data ?? []) : [];
+    const stats = !isLoggedIn ? dashboardStats.data : null;
 
     // Todo completion stats
-    const completedCount = todosList.filter((t) => t.completed).length;
-    const pendingCount = todosList.length - completedCount;
+    const completedCount =
+      stats?.completedCount ?? todosList.filter((t) => t.completed).length;
+    const pendingCount =
+      stats?.pendingCount ?? todosList.length - completedCount;
+    const totalTodos = stats?.totalTodos ?? todosList.length;
     const completionRate =
-      todosList.length > 0 ? (completedCount / todosList.length) * 100 : 0;
+      stats?.completionRate ??
+      (todosList.length > 0 ? (completedCount / todosList.length) * 100 : 0);
 
     // Recent activity (last 7 days)
     const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -153,20 +165,26 @@ export default function Dashboard() {
       completionRate,
       completedCount,
       pendingCount,
-      totalTodos: todosList.length,
+      totalTodos,
       last7Days,
       lengthDistribution,
       userActivity,
       todosList,
     };
-  }, [todos.data]);
+  }, [todos.data, dashboardStats.data, isLoggedIn]);
 
   const filteredTodos = useMemo(() => {
+    if (!isLoggedIn) return [];
     const list = todos.data ?? [];
     return hideCompleted ? list.filter((t) => !t.completed) : list;
-  }, [todos.data, hideCompleted]);
+  }, [todos.data, hideCompleted, isLoggedIn]);
 
-  if (todos.isLoading) {
+  // Show loading state while checking session or loading data
+  if (
+    sessionLoading ||
+    (isLoggedIn && todos.isLoading) ||
+    (!isLoggedIn && dashboardStats.isLoading)
+  ) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
         <div className="flex h-screen items-center justify-center">
@@ -423,124 +441,138 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {(todos.error || createTodo.error || updateTodo.error) && (
+              {(todos.error ||
+                createTodo.error ||
+                updateTodo.error ||
+                deleteTodo.error) && (
                 <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
                   {todos.error?.message ||
                     createTodo.error?.message ||
                     updateTodo.error?.message ||
+                    deleteTodo.error?.message ||
                     "Something went wrong."}
                 </div>
               )}
 
-              <form
-                className="mb-4 flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newTitle.trim() || createTodo.isPending) return;
-                  createTodo.mutate({ title: newTitle.trim() });
-                }}
-              >
-                <input
-                  type="text"
-                  placeholder="New task title"
-                  className="flex-1 rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:focus:ring-blue-400"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-                  disabled={!newTitle.trim() || createTodo.isPending}
+              {isLoggedIn && (
+                <form
+                  className="mb-4 flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newTitle.trim() || createTodo.isPending) return;
+                    createTodo.mutate({ title: newTitle.trim() });
+                  }}
                 >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    placeholder="New task title"
+                    className="flex-1 rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:focus:ring-blue-400"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+                    disabled={!newTitle.trim() || createTodo.isPending}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </form>
+              )}
 
-              <div className="max-h-48 space-y-2 overflow-y-auto">
-                {filteredTodos.length === 0 ? (
-                  <div className="rounded-md border border-gray-200 px-3 py-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
-                    {hideCompleted
-                      ? "No pending tasks. Great job!"
-                      : "No tasks yet. Add your first one above."}
-                  </div>
-                ) : (
-                  filteredTodos.map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-700"
-                    >
-                      <div className="flex flex-1 items-center gap-3">
-                        <button
-                          type="button"
-                          className={`inline-flex size-4 rounded-sm border ${t.completed ? "border-green-600 bg-green-500" : "border-gray-300 bg-transparent dark:border-gray-600"}`}
-                          onClick={() =>
-                            updateTodo.mutate({
-                              id: t.id,
-                              title: t.title,
-                              completed: !t.completed,
-                            })
-                          }
-                        >
-                          {t.completed && (
-                            <CheckCircle className="h-3 w-3 text-white" />
-                          )}
-                        </button>
-
-                        {editingTodoId === t.id ? (
-                          <form
-                            className="flex w-full items-center gap-2"
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              if (!editingTitle.trim()) return;
-                              updateTodo.mutate({
-                                id: t.id,
-                                title: editingTitle.trim(),
-                                completed: t.completed,
-                              });
-                              setEditingTodoId(null);
-                              setEditingTitle("");
-                            }}
-                          >
-                            <input
-                              autoFocus
-                              className="w-full rounded-md border border-gray-300 bg-transparent px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:focus:ring-blue-400"
-                              value={editingTitle}
-                              onChange={(e) => setEditingTitle(e.target.value)}
-                            />
-                            <button
-                              type="submit"
-                              className="rounded-md bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
-                            >
-                              Save
-                            </button>
-                          </form>
-                        ) : (
+              {isLoggedIn ? (
+                <div className="max-h-48 space-y-2 overflow-y-auto">
+                  {filteredTodos.length === 0 ? (
+                    <div className="rounded-md border border-gray-200 px-3 py-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                      {hideCompleted
+                        ? "No pending tasks. Great job!"
+                        : "No tasks yet. Add your first one above."}
+                    </div>
+                  ) : (
+                    filteredTodos.map((t) => (
+                      <div
+                        key={t.id}
+                        className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-700"
+                      >
+                        <div className="flex flex-1 items-center gap-3">
                           <button
                             type="button"
-                            className={`flex-1 text-left text-sm ${t.completed ? "text-gray-400 line-through" : "text-gray-900 dark:text-white"}`}
-                            onClick={() => {
-                              setEditingTodoId(t.id);
-                              setEditingTitle(t.title);
-                            }}
+                            className={`inline-flex size-4 rounded-sm border ${t.completed ? "border-green-600 bg-green-500" : "border-gray-300 bg-transparent dark:border-gray-600"}`}
+                            onClick={() =>
+                              updateTodo.mutate({
+                                id: t.id,
+                                title: t.title,
+                                completed: !t.completed,
+                              })
+                            }
                           >
-                            {t.title}
+                            {t.completed && (
+                              <CheckCircle className="h-3 w-3 text-white" />
+                            )}
                           </button>
-                        )}
-                      </div>
 
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="rounded-md bg-red-600 p-1 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
-                          onClick={() => deleteTodo.mutate({ id: t.id })}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                          {editingTodoId === t.id ? (
+                            <form
+                              className="flex w-full items-center gap-2"
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                if (!editingTitle.trim()) return;
+                                updateTodo.mutate({
+                                  id: t.id,
+                                  title: editingTitle.trim(),
+                                  completed: t.completed,
+                                });
+                                setEditingTodoId(null);
+                                setEditingTitle("");
+                              }}
+                            >
+                              <input
+                                autoFocus
+                                className="w-full rounded-md border border-gray-300 bg-transparent px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:focus:ring-blue-400"
+                                value={editingTitle}
+                                onChange={(e) =>
+                                  setEditingTitle(e.target.value)
+                                }
+                              />
+                              <button
+                                type="submit"
+                                className="rounded-md bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
+                              >
+                                Save
+                              </button>
+                            </form>
+                          ) : (
+                            <button
+                              type="button"
+                              className={`flex-1 text-left text-sm ${t.completed ? "text-gray-400 line-through" : "text-gray-900 dark:text-white"}`}
+                              onClick={() => {
+                                setEditingTodoId(t.id);
+                                setEditingTitle(t.title);
+                              }}
+                            >
+                              {t.title}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="rounded-md bg-red-600 p-1 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+                            onClick={() => deleteTodo.mutate({ id: t.id })}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-md border border-gray-200 px-3 py-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                  Please sign in to manage your tasks.
+                </div>
+              )}
             </div>
 
             {/* Auth Panel */}

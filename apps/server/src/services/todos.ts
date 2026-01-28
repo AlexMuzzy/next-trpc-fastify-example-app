@@ -1,18 +1,18 @@
-import type { DrizzleClient } from "../index.js";
-import * as schema from "../db/schema.js";
+import { DrizzleClient } from "@fsapp/server/db/database.js";
+import { todos } from "@fsapp/server/db/todo-schema.js";
 import { eq } from "drizzle-orm";
 
 export const listTodos = async (db: DrizzleClient) =>
-  await db.query.todos.findMany();
+  await db.select().from(todos);
 
 export const createTodo = async (db: DrizzleClient, title: string) => {
   const [todo] = await db
-    .insert(schema.todos)
+    .insert(todos)
     .values({ title, completed: false })
     .returning({
-      id: schema.todos.id,
-      title: schema.todos.title,
-      completed: schema.todos.completed,
+      id: todos.id,
+      title: todos.title,
+      completed: todos.completed,
     });
   return todo;
 };
@@ -24,25 +24,22 @@ export const updateTodo = async (
   completed: boolean,
 ) => {
   const [todo] = await db
-    .update(schema.todos)
+    .update(todos)
     .set({ title, completed })
-    .where(eq(schema.todos.id, id))
+    .where(eq(todos.id, id))
     .returning({
-      id: schema.todos.id,
-      title: schema.todos.title,
-      completed: schema.todos.completed,
+      id: todos.id,
+      title: todos.title,
+      completed: todos.completed,
     });
   return todo;
 };
 
 export const deleteTodo = async (db: DrizzleClient, id: number) => {
-  const [todo] = await db
-    .delete(schema.todos)
-    .where(eq(schema.todos.id, id))
-    .returning({
-      id: schema.todos.id,
-      title: schema.todos.title,
-      completed: schema.todos.completed,
-    });
+  const [todo] = await db.delete(todos).where(eq(todos.id, id)).returning({
+    id: todos.id,
+    title: todos.title,
+    completed: todos.completed,
+  });
   return todo;
 };

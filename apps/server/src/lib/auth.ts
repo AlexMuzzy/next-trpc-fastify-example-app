@@ -1,15 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { serverConfig } from "@fsapp/config";
-import type { DrizzleClient } from "../index.js";
-import { user, session, account, verification } from "../db/schema.js";
-
-const authSchema = {
-  user,
-  session,
-  account,
-  verification,
-} as const;
+import { DrizzleClient, authSchema } from "../db/database.js";
 
 export const createAuth = (db: DrizzleClient) =>
   betterAuth({
@@ -36,3 +28,5 @@ export const createAuth = (db: DrizzleClient) =>
       cookiePrefix: "fsapp",
     },
   });
+
+export default createAuth;

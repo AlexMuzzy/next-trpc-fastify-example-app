@@ -4,11 +4,9 @@ import { fastifyTRPCPlugin } from "@trpc/server/adapters/fastify";
 import { fromNodeHeaders } from "better-auth/node";
 import { appRouter } from "./router.js";
 import { serverConfig } from "@fsapp/config";
-import { drizzle, PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import * as schema from "./db/schema.js";
-import { createAuth } from "./lib/auth.js";
-
-export type DrizzleClient = PostgresJsDatabase<typeof schema>;
+import { drizzle } from "drizzle-orm/postgres-js";
+import { schema } from "./db/database.js";
+import createAuth from "./lib/auth.js";
 
 async function main() {
   const server = Fastify({ logger: true });

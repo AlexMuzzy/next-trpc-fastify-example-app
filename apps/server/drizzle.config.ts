@@ -2,7 +2,8 @@ import { defineConfig } from "drizzle-kit";
 import { serverConfig } from "@fsapp/config";
 
 export default defineConfig({
-  schema: "./src/db/schema.ts",
+  // Point directly to individual schema files to avoid ES module resolution issues
+  schema: ["./src/db/auth-schema.ts", "./src/db/todo-schema.ts"],
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {

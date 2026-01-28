@@ -35,7 +35,9 @@ async function main() {
 
         return {
           db,
+          auth,
           user: session?.user ?? null,
+          headers: fromNodeHeaders(req.headers),
         };
       },
     },

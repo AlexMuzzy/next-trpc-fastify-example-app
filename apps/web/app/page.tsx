@@ -1,6 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { trpc } from "@fsapp/trpc/client";
+import { useSession, authClient } from "@/lib/auth/auth-client";
 import {
   BarChart,
   Bar,
@@ -19,24 +22,31 @@ import {
 } from "recharts";
 import {
   CheckCircle,
-  Users,
   TrendingUp,
   Activity,
   Plus,
   Trash2,
-  UserPlus,
   Target,
   Clock,
   BarChart3,
   PieChart as PieChartIcon,
-  Users as UsersIcon,
+  User,
+  LogIn,
+  UserPlus,
+  LogOut,
+  Mail,
+  MailCheck,
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 
 export default function Dashboard() {
+  const router = useRouter();
+  const { data: session, isPending: sessionLoading } = useSession();
   const health = trpc.healthz.useQuery();
   const todos = trpc.todos.list.useQuery();
-  const users = trpc.users.list.useQuery();
+  const authStats = trpc.auth.stats.useQuery(undefined, {
+    enabled: !!session?.user,
+  });
   const utils = trpc.useUtils();
 
   // State for todo management
@@ -45,13 +55,9 @@ export default function Dashboard() {
   const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
 
-  // State for user management
-  const [newName, setNewName] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-
   // State for visualization tabs
   const [activeTab, setActiveTab] = useState<
-    "overview" | "activity" | "distribution" | "users"
+    "overview" | "activity" | "distribution"
   >("overview");
 
   // Mutations
@@ -74,16 +80,9 @@ export default function Dashboard() {
     },
   });
 
-  const createUser = trpc.users.create.useMutation({
-    onSuccess: async () => {
-      await utils.users.list.invalidate();
-    },
-  });
-
   // Computed data for visualizations
   const dashboardData = useMemo(() => {
     const todosList = todos.data ?? [];
-    const usersList = users.data ?? [];
 
     // Todo completion stats
     const completedCount = todosList.filter((t) => t.completed).length;
@@ -148,33 +147,31 @@ export default function Dashboard() {
       },
     ];
 
-    // User activity (todos per user - simulated since no user-todo relationship)
-    const userActivity = usersList.map((user, index) => ({
-      name: user.name,
-      todos: Math.floor(Math.random() * 10) + 1, // Simulated data
-      completed: Math.floor(Math.random() * 5) + 1,
-    }));
+    // User activity (empty for now - can be populated with Better-Auth users later)
+    const userActivity: Array<{
+      name: string;
+      todos: number;
+      completed: number;
+    }> = [];
 
     return {
       completionRate,
       completedCount,
       pendingCount,
       totalTodos: todosList.length,
-      totalUsers: usersList.length,
       last7Days,
       lengthDistribution,
       userActivity,
       todosList,
-      usersList,
     };
-  }, [todos.data, users.data]);
+  }, [todos.data]);
 
   const filteredTodos = useMemo(() => {
     const list = todos.data ?? [];
     return hideCompleted ? list.filter((t) => !t.completed) : list;
   }, [todos.data, hideCompleted]);
 
-  if (todos.isLoading || users.isLoading) {
+  if (todos.isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
         <div className="flex h-screen items-center justify-center">
@@ -371,33 +368,6 @@ export default function Dashboard() {
           </div>
         );
 
-      case "users":
-        return (
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-              User Activity Overview
-            </h3>
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={dashboardData.userActivity}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="name" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "none",
-                    borderRadius: "8px",
-                    color: "#f9fafb",
-                  }}
-                />
-                <Legend />
-                <Bar dataKey="todos" fill="#3b82f6" name="Total Tasks" />
-                <Bar dataKey="completed" fill="#10b981" name="Completed" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        );
-
       default:
         return null;
     }
@@ -432,9 +402,6 @@ export default function Dashboard() {
             <div className="flex items-center space-x-4">
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {dashboardData.totalUsers} Users
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {dashboardData.totalTodos} Total Tasks
                 </p>
               </div>
@@ -581,97 +548,149 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* User Management */}
+            {/* Auth Panel */}
             <div>
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  User Management
+                  Authentication
                 </h3>
-                <Users className="h-5 w-5 text-gray-400" />
+                <User className="h-5 w-5 text-gray-400" />
               </div>
 
-              {(users.error || createUser.error) && (
-                <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-                  {users.error?.message ||
-                    createUser.error?.message ||
-                    "Something went wrong."}
+              {sessionLoading ? (
+                <div className="rounded-md border border-gray-200 px-3 py-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                  Loading...
                 </div>
-              )}
-
-              <form
-                className="mb-4 space-y-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (
-                    !newName.trim() ||
-                    !newEmail.trim() ||
-                    createUser.isPending
-                  )
-                    return;
-                  createUser.mutate({
-                    name: newName.trim(),
-                    email: newEmail.trim(),
-                  });
-                  setNewName("");
-                  setNewEmail("");
-                }}
-              >
-                <input
-                  type="text"
-                  placeholder="User name"
-                  className="w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:focus:ring-blue-400"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                />
-                <input
-                  type="email"
-                  placeholder="User email"
-                  className="w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:focus:ring-blue-400"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-                  disabled={
-                    !newName.trim() || !newEmail.trim() || createUser.isPending
-                  }
-                >
-                  <UserPlus className="mr-2 inline h-4 w-4" />
-                  Add User
-                </button>
-              </form>
-
-              <div className="max-h-48 space-y-2 overflow-y-auto">
-                {dashboardData.usersList.length === 0 ? (
-                  <div className="rounded-md border border-gray-200 px-3 py-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
-                    No users yet. Add one above.
+              ) : session?.user ? (
+                <div className="space-y-4">
+                  {/* User Info */}
+                  <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-3 dark:border-gray-600 dark:bg-gray-700">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
+                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                          {session.user.name?.charAt(0).toUpperCase() || "U"}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {session.user.name || "User"}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {session.user.email}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  dashboardData.usersList.map((u) => (
-                    <div
-                      key={u.id}
-                      className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-700"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                            {u.name.charAt(0).toUpperCase()}
+
+                  {/* User Stats */}
+                  {authStats.data && (
+                    <div className="space-y-2">
+                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                              Total Users
+                            </span>
+                          </div>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {authStats.data.totalUsers}
                           </span>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {u.name}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {u.email}
-                          </p>
+                      </div>
+                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <MailCheck className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                              Verified
+                            </span>
+                          </div>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {authStats.data.verifiedUsers}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                              Recent (7d)
+                            </span>
+                          </div>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {authStats.data.recentUsers}
+                          </span>
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  )}
+
+                  {/* Recent Users List */}
+                  {authStats.data && authStats.data.users.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                        Recent Users
+                      </p>
+                      <div className="max-h-32 space-y-1 overflow-y-auto">
+                        {authStats.data.users.map((u) => (
+                          <div
+                            key={u.id}
+                            className="flex items-center gap-2 rounded-md bg-gray-50 px-2 py-1.5 dark:bg-gray-700"
+                          >
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
+                              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                                {u.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-gray-900 dark:text-white">
+                                {u.name}
+                              </p>
+                              <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                                {u.email}
+                              </p>
+                            </div>
+                            {u.emailVerified && (
+                              <MailCheck className="h-3 w-3 text-green-600 dark:text-green-400" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sign Out Button */}
+                  <button
+                    onClick={async () => {
+                      await authClient.signOut();
+                      router.refresh();
+                    }}
+                    className="w-full rounded-md bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+                  >
+                    <LogOut className="mr-2 inline h-4 w-4" />
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Link
+                    href="/auth/sign-in"
+                    className="flex w-full items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                  >
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/auth/sign-up"
+                    className="flex w-full items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Sign Up
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -714,17 +733,6 @@ export default function Dashboard() {
                 >
                   <PieChartIcon className="h-4 w-4" />
                   <span>Distribution</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("users")}
-                  className={`flex items-center space-x-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                    activeTab === "users"
-                      ? "bg-white text-blue-600 shadow-sm dark:bg-gray-600 dark:text-blue-400"
-                      : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-                  }`}
-                >
-                  <UsersIcon className="h-4 w-4" />
-                  <span>Users</span>
                 </button>
               </div>
             </div>

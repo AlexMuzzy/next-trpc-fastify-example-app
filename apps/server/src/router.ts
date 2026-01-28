@@ -7,11 +7,14 @@ import {
   updateTodo,
   deleteTodo,
 } from "./services/todos.js";
-import { getUsers, createUser } from "./services/users.js";
+import { getUserStats } from "./services/auth-stats.js";
 import type { DrizzleClient } from "./index.js";
+import type { createAuth } from "./lib/auth.js";
 
 export type RequestContext = {
   db: DrizzleClient;
+  auth: ReturnType<typeof createAuth>;
+  headers?: globalThis.Headers;
 };
 
 const t = initTRPC.context<RequestContext>().create({
@@ -45,18 +48,10 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => deleteTodo(ctx.db, input.id)),
   }),
-  users: router({
-    list: publicProcedure.query(async ({ ctx }) => getUsers(ctx.db)),
-    create: publicProcedure
-      .input(
-        z.object({
-          name: z.string().min(1).max(200),
-          email: z.string().email(),
-        }),
-      )
-      .mutation(async ({ input, ctx }) =>
-        createUser(ctx.db, input.name, input.email),
-      ),
+  auth: router({
+    stats: publicProcedure.query(async ({ ctx }) =>
+      getUserStats(ctx.auth, ctx.headers),
+    ),
   }),
 });
 

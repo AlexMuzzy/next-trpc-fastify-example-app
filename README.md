@@ -1,4 +1,4 @@
-# Fullstack App Testbench
+# NextJS tRPC Fastify Example App
 
 A modern fullstack application template demonstrating how to build a production-ready application using **Fastify**, **tRPC**, and **Next.js** in a monorepo architecture. This project showcases best practices for type-safe API development, authentication, database management, and client-server communication.
 

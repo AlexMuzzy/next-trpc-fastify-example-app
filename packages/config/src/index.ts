@@ -15,6 +15,36 @@ const serverEnvSchema = z.object({
     .default("development"),
   PORT: z.string().default("4000"),
   HOST: z.string().default("0.0.0.0"),
+
+  /**
+   * Public API URL used by the web client and Better-Auth.
+   * In production, this should be the externally reachable API origin,
+   * e.g. https://api.example.com
+   */
+  BASE_URL: z.string().url().default("http://localhost:4000"),
+
+  /**
+   * Public web app URL used for CORS and trusted origins.
+   * In production, this should be the app origin,
+   * e.g. https://app.example.com
+   */
+  CLIENT_URL: z.string().url().default("http://localhost:3000"),
+
+  /**
+   * Parent domain used for cross-subdomain cookies.
+   * In production, this should match your apex domain,
+   * e.g. example.com
+   */
+  CLIENT_DOMAIN: z.string().default("localhost"),
+
+  /**
+   * Better-Auth secret used to sign and verify tokens.
+   * Override this with a long, random value in each environment.
+   */
+  BETTER_AUTH_SECRET: z
+    .string()
+    .default("change-me-in-production-better-auth-secret"),
+
   NEXT_PUBLIC_API_URL: z.string().url().optional(),
   POSTGRES_URL: z
     .string()
